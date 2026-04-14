@@ -2,7 +2,7 @@
   "properties": {
     "model": {
       "type": "string",
-      "description": "The model to use for this compaction request, e.g. 'gpt-5.2'."
+      "description": "Model ID used to generate the response, like `gpt-5` or `o3`. OpenAI offers a wide range of models with different capabilities, performance characteristics, and price points. Refer to the [model guide](/docs/models) to browse and compare available models."
     },
     "input": {
       "anyOf": [
@@ -46,6 +46,18 @@
         {
           "type": "string",
           "description": "A system (or developer) message inserted into the model's context.\nWhen used along with `previous_response_id`, the instructions from a previous response will not be carried over to the next response. This makes it simple to swap out system (or developer) messages in new responses."
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "prompt_cache_key": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 64,
+          "description": "A key to use when reading from or writing to the prompt cache."
         },
         {
           "type": "null"

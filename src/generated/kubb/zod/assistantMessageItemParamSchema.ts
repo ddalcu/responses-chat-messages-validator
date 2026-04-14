@@ -36,7 +36,7 @@ export const assistantMessageItemParamSchema = z.object({
     z
       .enum(["commentary", "final_answer"])
       .describe(
-        "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`). For models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend phase on all assistant messages. Not used for user messages.",
+        "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`). For models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend phase on all assistant messages. Omitting it can degrade performance. Not used for user messages.",
       ),
   ),
   status: z.optional(z.union([z.string(), z.null()])),

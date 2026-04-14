@@ -9,7 +9,9 @@ import { z } from "zod";
 export const compactResponseMethodPublicBodySchema = z.object({
   model: z
     .string()
-    .describe("The model to use for this compaction request, e.g. 'gpt-5.2'."),
+    .describe(
+      "Model ID used to generate the response, like `gpt-5` or `o3`. OpenAI offers a wide range of models with different capabilities, performance characteristics, and price points. Refer to the [model guide](/docs/models) to browse and compare available models.",
+    ),
   input: z.optional(
     z.union([
       z.union([z.array(z.lazy(() => itemParamSchema)), z.string()]),
@@ -18,4 +20,5 @@ export const compactResponseMethodPublicBodySchema = z.object({
   ),
   previous_response_id: z.optional(z.union([z.string(), z.null()])),
   instructions: z.optional(z.union([z.string(), z.null()])),
+  prompt_cache_key: z.optional(z.union([z.string(), z.null()])),
 });

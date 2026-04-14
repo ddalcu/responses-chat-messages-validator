@@ -591,7 +591,7 @@
           "phase": {
             "type": "string",
             "enum": ["commentary", "final_answer"],
-            "description": "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`). For models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend phase on all assistant messages. Not used for user messages."
+            "description": "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`). For models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend phase on all assistant messages. Omitting it can degrade performance. Not used for user messages."
           },
           "status": {
             "anyOf": [
@@ -1846,6 +1846,11 @@
             },
             "type": "array",
             "description": "The content of the message"
+          },
+          "phase": {
+            "type": "string",
+            "enum": ["commentary", "final_answer"],
+            "description": "Labels an `assistant` message as intermediate commentary (`commentary`) or the final answer (`final_answer`). For models like `gpt-5.3-codex` and beyond, when sending follow-up requests, preserve and resend phase on all assistant messages. Omitting it can degrade performance. Not used for user messages."
           }
         },
         "type": "object",
@@ -3855,7 +3860,7 @@
         "properties": {
           "model": {
             "type": "string",
-            "description": "The model to use for this compaction request, e.g. 'gpt-5.2'."
+            "description": "Model ID used to generate the response, like `gpt-5` or `o3`. OpenAI offers a wide range of models with different capabilities, performance characteristics, and price points. Refer to the [model guide](/docs/models) to browse and compare available models."
           },
           "input": {
             "anyOf": [
@@ -3898,6 +3903,18 @@
               {
                 "type": "string",
                 "description": "A system (or developer) message inserted into the model's context.\nWhen used along with `previous_response_id`, the instructions from a previous response will not be carried over to the next response. This makes it simple to swap out system (or developer) messages in new responses."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prompt_cache_key": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "description": "A key to use when reading from or writing to the prompt cache."
               },
               {
                 "type": "null"
@@ -3948,38 +3965,36 @@
         "example": {
           "id": "resp_001",
           "object": "response.compaction",
+          "created_at": 1764967971,
           "output": [
             {
+              "id": "msg_000",
               "type": "message",
-              "role": "user",
+              "status": "completed",
               "content": [
                 {
                   "type": "input_text",
-                  "text": "Summarize our launch checklist from last week."
+                  "text": "Create a simple landing page for a dog petting cafe."
                 }
-              ]
+              ],
+              "role": "user"
             },
             {
-              "type": "message",
-              "role": "user",
-              "content": [
-                {
-                  "type": "input_text",
-                  "text": "You are performing a CONTEXT CHECKPOINT COMPACTION..."
-                }
-              ]
-            },
-            {
-              "type": "compaction",
               "id": "cmp_001",
-              "encrypted_content": "encrypted-summary"
+              "type": "compaction",
+              "encrypted_content": "gAAAAABpM0Yj-...="
             }
           ],
-          "created_at": 1731459200,
           "usage": {
-            "input_tokens": 42897,
-            "output_tokens": 12000,
-            "total_tokens": 54912
+            "input_tokens": 139,
+            "input_tokens_details": {
+              "cached_tokens": 0
+            },
+            "output_tokens": 438,
+            "output_tokens_details": {
+              "reasoning_tokens": 64
+            },
+            "total_tokens": 577
           }
         }
       },

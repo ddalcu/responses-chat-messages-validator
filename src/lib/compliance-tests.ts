@@ -72,6 +72,7 @@ export interface TestTemplate {
   expectedStatuses?: number[];
   responseSchema?: ResponseSchema | null;
   getRequest: (config: TestConfig) => TestRequestBody;
+  getMockResponse?: (config: TestConfig) => unknown;
   streaming?: boolean;
   validators?: ResponseValidator[];
   unsupportedReason?: (config: TestConfig) => string | null;
@@ -92,6 +93,27 @@ const hasOutputType =
     if (!hasType) {
       return [`Expected output item of type "${type}" but none found`];
     }
+    return [];
+  };
+
+const hasAssistantMessagePhase =
+  (phase: "commentary" | "final_answer"): ResponseValidator =>
+  (response) => {
+    const hasPhase = response.output?.some(
+      (item) =>
+        item.type === "message" &&
+        "role" in item &&
+        item.role === "assistant" &&
+        "phase" in item &&
+        item.phase === phase,
+    );
+
+    if (!hasPhase) {
+      return [
+        `Expected assistant output message with phase "${phase}" but none found`,
+      ];
+    }
+
     return [];
   };
 
@@ -268,6 +290,102 @@ export const testTemplates: TestTemplate[] = [
       ],
     }),
     validators: [hasOutput, completedStatus],
+  },
+
+  {
+    id: "response-output-phase-schema",
+    name: "Response Output Phase Schema",
+    description:
+      "Validates ResponseResource schema support for assistant output phase labels",
+    getRequest: (config) => ({
+      model: config.model,
+      note: "Local schema fixture; no HTTP request is sent.",
+    }),
+    getMockResponse: (config) => ({
+      id: "resp_phase_schema",
+      object: "response",
+      created_at: 1764967971,
+      completed_at: 1764967972,
+      status: "completed",
+      incomplete_details: null,
+      model: config.model,
+      previous_response_id: null,
+      instructions: null,
+      output: [
+        {
+          id: "msg_phase_commentary",
+          type: "message",
+          status: "completed",
+          role: "assistant",
+          phase: "commentary",
+          content: [
+            {
+              type: "output_text",
+              text: "I am checking the answer.",
+              annotations: [],
+            },
+          ],
+        },
+        {
+          id: "msg_phase_final",
+          type: "message",
+          status: "completed",
+          role: "assistant",
+          phase: "final_answer",
+          content: [
+            {
+              type: "output_text",
+              text: "The answer is four.",
+              annotations: [],
+            },
+          ],
+        },
+      ],
+      error: null,
+      tools: [],
+      tool_choice: "auto",
+      truncation: "disabled",
+      parallel_tool_calls: true,
+      text: {
+        format: {
+          type: "text",
+        },
+      },
+      top_p: 1,
+      presence_penalty: 0,
+      frequency_penalty: 0,
+      top_logprobs: 0,
+      temperature: 1,
+      reasoning: {
+        effort: null,
+        summary: null,
+      },
+      usage: {
+        input_tokens: 1,
+        output_tokens: 2,
+        total_tokens: 3,
+        input_tokens_details: {
+          cached_tokens: 0,
+        },
+        output_tokens_details: {
+          reasoning_tokens: 0,
+        },
+      },
+      max_output_tokens: null,
+      max_tool_calls: null,
+      store: true,
+      background: false,
+      service_tier: "default",
+      metadata: {},
+      safety_identifier: null,
+      prompt_cache_key: null,
+    }),
+    validators: [
+      hasOutput,
+      completedStatus,
+      hasAssistantMessagePhase("commentary"),
+      hasAssistantMessagePhase("final_answer"),
+    ],
   },
 
   {
@@ -510,11 +628,12 @@ export const testTemplates: TestTemplate[] = [
     id: "compact-response",
     name: "Compaction Endpoint",
     description:
-      "Compacts a short conversation and validates the compacted response schema",
+      "Compacts a short conversation with prompt_cache_key and validates the compacted response schema",
     endpoint: "/responses/compact",
     responseSchema: compactResourceSchema,
     getRequest: (config) => ({
       model: config.model,
+      prompt_cache_key: "openresponses-compact-test",
       input: [
         {
           type: "message",
@@ -849,6 +968,70 @@ async function readResponseBody(
   }
 
   return { rawData: await response.text() };
+}
+
+function displayRequest(
+  requestBody: TestRequestBody,
+  streaming: boolean,
+): TestRequestBody {
+  return streaming ? { ...requestBody, stream: true } : requestBody;
+}
+
+function validateResponseData(
+  template: TestTemplate,
+  requestBody: TestRequestBody,
+  rawData: unknown,
+  duration: number,
+  responseSchema: ResponseSchema | null,
+  context: ValidatorContext,
+): TestResult {
+  const request = displayRequest(requestBody, context.streaming);
+
+  if (!responseSchema) {
+    return {
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      status: "passed",
+      duration,
+      request,
+      response: rawData,
+      streamEvents: context.sseResult?.events.length,
+    };
+  }
+
+  const parseResult = responseSchema.safeParse(rawData);
+  if (!parseResult.success) {
+    return {
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      status: "failed",
+      duration,
+      request,
+      response: rawData,
+      errors: parseResult.error.issues.map(
+        (issue) => `${issue.path.join(".")}: ${issue.message}`,
+      ),
+      streamEvents: context.sseResult?.events.length,
+    };
+  }
+
+  const errors = (template.validators ?? []).flatMap((v) =>
+    v(parseResult.data as ParsedResponse, context),
+  );
+
+  return {
+    id: template.id,
+    name: template.name,
+    description: template.description,
+    status: errors.length === 0 ? "passed" : "failed",
+    duration,
+    request,
+    response: parseResult.data,
+    errors,
+    streamEvents: context.sseResult?.events.length,
+  };
 }
 
 function getCompactedOutput(response: unknown): {
@@ -1445,6 +1628,17 @@ async function runTest(
   const requestBody = template.getRequest(config);
 
   try {
+    if (template.getMockResponse) {
+      return validateResponseData(
+        template,
+        requestBody,
+        template.getMockResponse(config),
+        Date.now() - startTime,
+        responseSchema,
+        { streaming, transport },
+      );
+    }
+
     if (transport === "websocket") {
       const sseResult = await makeWebSocketRequest(config, requestBody);
       const duration = Date.now() - startTime;
@@ -1503,59 +1697,21 @@ async function runTest(
         description: template.description,
         status: "failed",
         duration,
-        request: requestBody,
+        request: displayRequest(requestBody, streaming),
         response: rawData,
         errors: [`HTTP ${response.status}: ${String(rawData)}`],
         streamEvents: sseResult?.events.length,
       };
     }
 
-    if (!responseSchema) {
-      return {
-        id: template.id,
-        name: template.name,
-        description: template.description,
-        status: "passed",
-        duration,
-        request: streaming ? { ...requestBody, stream: true } : requestBody,
-        response: rawData,
-        streamEvents: sseResult?.events.length,
-      };
-    }
-
-    const parseResult = responseSchema.safeParse(rawData);
-    if (!parseResult.success) {
-      return {
-        id: template.id,
-        name: template.name,
-        description: template.description,
-        status: "failed",
-        duration,
-        request: streaming ? { ...requestBody, stream: true } : requestBody,
-        response: rawData,
-        errors: parseResult.error.issues.map(
-          (issue) => `${issue.path.join(".")}: ${issue.message}`,
-        ),
-        streamEvents: sseResult?.events.length,
-      };
-    }
-
-    const context: ValidatorContext = { streaming, sseResult, transport };
-    const errors = (template.validators ?? []).flatMap((v) =>
-      v(parseResult.data as ParsedResponse, context),
-    );
-
-    return {
-      id: template.id,
-      name: template.name,
-      description: template.description,
-      status: errors.length === 0 ? "passed" : "failed",
+    return validateResponseData(
+      template,
+      requestBody,
+      rawData,
       duration,
-      request: streaming ? { ...requestBody, stream: true } : requestBody,
-      response: parseResult.data,
-      errors,
-      streamEvents: sseResult?.events.length,
-    };
+      responseSchema,
+      { streaming, sseResult, transport },
+    );
   } catch (error) {
     return {
       id: template.id,
