@@ -33,38 +33,36 @@
   "example": {
     "id": "resp_001",
     "object": "response.compaction",
+    "created_at": 1764967971,
     "output": [
       {
+        "id": "msg_000",
         "type": "message",
-        "role": "user",
+        "status": "completed",
         "content": [
           {
             "type": "input_text",
-            "text": "Summarize our launch checklist from last week."
+            "text": "Create a simple landing page for a dog petting cafe."
           }
-        ]
+        ],
+        "role": "user"
       },
       {
-        "type": "message",
-        "role": "user",
-        "content": [
-          {
-            "type": "input_text",
-            "text": "You are performing a CONTEXT CHECKPOINT COMPACTION..."
-          }
-        ]
-      },
-      {
-        "type": "compaction",
         "id": "cmp_001",
-        "encrypted_content": "encrypted-summary"
+        "type": "compaction",
+        "encrypted_content": "gAAAAABpM0Yj-...="
       }
     ],
-    "created_at": 1731459200,
     "usage": {
-      "input_tokens": 42897,
-      "output_tokens": 12000,
-      "total_tokens": 54912
+      "input_tokens": 139,
+      "input_tokens_details": {
+        "cached_tokens": 0
+      },
+      "output_tokens": 438,
+      "output_tokens_details": {
+        "reasoning_tokens": 64
+      },
+      "total_tokens": 577
     }
   },
   "x-openai-class-name": "responsesapi.api.resources.compact_resource.CompactionResourceBody"

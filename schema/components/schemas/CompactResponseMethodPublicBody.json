@@ -51,6 +51,18 @@
           "type": "null"
         }
       ]
+    },
+    "prompt_cache_key": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 64,
+          "description": "A key to use when reading from or writing to the prompt cache."
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "type": "object",
