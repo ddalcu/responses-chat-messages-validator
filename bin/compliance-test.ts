@@ -1,11 +1,25 @@
 #!/usr/bin/env bun
 
-import {
-  testTemplates,
-  runAllTests,
-  type TestConfig,
-  type TestResult,
-} from "../src/lib/compliance-tests";
+import { runAllTests } from "../src/lib/compliance/core/runner";
+import type {
+  SpecSuite,
+  TestConfig,
+  TestResult,
+} from "../src/lib/compliance/core/types";
+import { anthropicMessagesSuite } from "../src/lib/compliance/anthropic-messages/suite";
+import { chatCompletionsSuite } from "../src/lib/compliance/chat-completions/suite";
+import { responsesSuite } from "../src/lib/compliance/responses/suite";
+
+// Spec registry. Keys are user-facing values for the `--spec` flag.
+const specs = {
+  responses: responsesSuite,
+  "chat-completions": chatCompletionsSuite,
+  "anthropic-messages": anthropicMessagesSuite,
+} as const satisfies Record<string, SpecSuite>;
+
+type SpecId = keyof typeof specs;
+
+const specIds = Object.keys(specs) as SpecId[];
 
 const colors = {
   green: (s: string) => `\x1b[32m${s}\x1b[0m`,
@@ -15,6 +29,7 @@ const colors = {
 };
 
 interface CliArgs {
+  spec?: string;
   baseUrl?: string;
   apiKey?: string;
   model?: string;
@@ -35,6 +50,10 @@ function parseArgs(argv: string[]): CliArgs {
     const nextArg = argv[i + 1];
 
     switch (arg) {
+      case "--spec":
+        args.spec = nextArg;
+        i += 2;
+        break;
       case "--base-url":
       case "-u":
         args.baseUrl = nextArg;
@@ -86,21 +105,29 @@ function parseArgs(argv: string[]): CliArgs {
 }
 
 function printHelp() {
+  const specList = specIds.map((id) => `${id} (${specs[id].label})`).join(", ");
   console.log(`
 Usage: bun run bin/compliance-test.ts [options]
 
 Options:
-  -u, --base-url <url>        API base URL (required)
-  -k, --api-key <key>         API key (required, or set OPENRESPONSES_API_KEY env var)
-  -m, --model <model>         Model name (default: gpt-4o-mini)
-      --auth-header <name>    Auth header name (default: Authorization)
-      --no-bearer             Disable Bearer prefix in auth header
+      --spec <id>             Spec suite to run: ${specIds.join(", ")} (default: responses)
+  -u, --base-url <url>        API base URL (overrides spec default)
+  -k, --api-key <key>         API key (or set OPENRESPONSES_API_KEY env var)
+  -m, --model <model>         Model name (overrides spec default)
+      --auth-header <name>    Auth header name (overrides spec default)
+      --no-bearer             Disable Bearer prefix in auth header (overrides spec default)
   -f, --filter <ids>          Filter tests by ID (comma-separated)
   -v, --verbose               Verbose output with request/response details
       --json                  Output results as JSON
   -h, --help                  Show this help message
 
+Available specs:
+  ${specList}
+
 Examples:
+  bun run test:compliance --spec responses -k $OPENAI_API_KEY
+  bun run test:compliance --spec chat-completions -k $OPENAI_API_KEY
+  bun run test:compliance --spec anthropic-messages -k $ANTHROPIC_API_KEY
   bun run test:compliance --base-url http://localhost:8000/v1 --api-key sk-test-123
   bun run test:compliance -u https://api.openai.com/v1 -k $OPENAI_API_KEY --filter basic-response
   bun run test:compliance -u $API_URL -k $API_KEY --json > results.json
@@ -173,12 +200,19 @@ async function main() {
     process.exit(0);
   }
 
-  const baseUrl = args.baseUrl;
-  if (!baseUrl) {
-    console.error(`${colors.red("Error:")} --base-url is required`);
-    console.error(`Run with --help for usage information.`);
+  const specId = (args.spec ?? "responses") as string;
+  if (!(specId in specs)) {
+    console.error(
+      `${colors.red("Error:")} unknown --spec "${specId}". Available: ${specIds.join(", ")}`,
+    );
     process.exit(1);
   }
+  // Widen the suite from the inferred union of concrete suites to the
+  // generic `SpecSuite` shape so the runner's generics align across all
+  // registered specs.
+  const suite = specs[specId as SpecId] as SpecSuite;
+
+  const baseUrl = args.baseUrl ?? suite.defaultBaseUrl;
 
   const apiKey = args.apiKey || process.env.OPENRESPONSES_API_KEY;
   if (!apiKey) {
@@ -192,14 +226,15 @@ async function main() {
   const config: TestConfig = {
     baseUrl,
     apiKey,
-    model: args.model || "gpt-4o-mini",
-    authHeaderName: args.authHeader || "Authorization",
-    useBearerPrefix: !args.noBearer,
+    model: args.model || suite.defaultModel,
+    authHeaderName: args.authHeader || suite.defaultAuthHeaderName,
+    // Default to the spec's preference, but `--no-bearer` overrides regardless.
+    useBearerPrefix: args.noBearer ? false : suite.defaultUseBearerPrefix,
     runtime: "server",
   };
 
   if (args.filter?.length) {
-    const availableIds = testTemplates.map((t) => t.id);
+    const availableIds = suite.templates.map((t) => t.id);
     const invalidFilters = args.filter.filter(
       (id) => !availableIds.includes(id),
     );
@@ -225,6 +260,7 @@ async function main() {
   };
 
   if (!args.json) {
+    console.log(`Spec: ${suite.label} (${suite.id})`);
     console.log(`Running compliance tests against: ${config.baseUrl}`);
     console.log(`Model: ${config.model}`);
     if (args.filter) {
@@ -234,10 +270,10 @@ async function main() {
   }
 
   const selectedTemplates = args.filter?.length
-    ? testTemplates.filter((template) => args.filter?.includes(template.id))
-    : testTemplates;
+    ? suite.templates.filter((template) => args.filter?.includes(template.id))
+    : suite.templates;
 
-  await runAllTests(config, onProgress, selectedTemplates);
+  await runAllTests(suite, config, onProgress, selectedTemplates);
 
   const finalResults = allUpdates.filter(
     (r) => r.status === "passed" || r.status === "failed",
@@ -252,6 +288,7 @@ async function main() {
     console.log(
       JSON.stringify(
         {
+          spec: suite.id,
           summary: {
             passed,
             failed,

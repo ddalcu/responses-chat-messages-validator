@@ -1,44 +1,70 @@
-# Open Responses
+# Responses / Chat / Messages Validator
 
-Open Responses is an open-source specification for multi-provider, interoperable LLM interfaces inspired by the OpenAI Responses API. It defines a shared request/response model, streaming semantics, and tool invocation patterns so clients and providers can exchange structured inputs and outputs in a consistent shape.
+Compliance test suites for three LLM API surfaces, each runnable independently:
 
-At a high level, the spec centers on:
+- **OpenAI Responses** — Open Responses spec (forked upstream): `POST /responses`
+- **OpenAI Chat Completions** — `POST /chat/completions`
+- **Anthropic Messages** — `POST /v1/messages`
 
-- An agentic loop that lets models emit tool calls, receive results, and continue.
-- Items as the atomic unit of context, with clear state machines and streaming updates.
-- Semantic streaming events (not raw text deltas) for predictable, provider-agnostic clients.
-- Extensibility for provider-specific tools and item types without breaking the core schema.
+Each suite ships its own OpenAPI schema, Zod validators, streaming parser, and test templates. Point any of them at any compliant backend and get pass/fail results.
+
+This repo is a fork of [openresponses/openresponses](https://github.com/openresponses/openresponses) extended into a multi-spec hub.
 
 ## What's in this repo
 
-- Full specification: `public/openapi/openapi.json`
-- Website documentation content (source): `src/pages`
-- Compliance tests: `bin/compliance-test.ts`
+- Specs: `schema/{responses,chat-completions,anthropic-messages}/openapi.json`
+- Built/inlined specs: `public/openapi/{responses,chat-completions,anthropic-messages}.json`
+- Generated Zod: `src/generated/kubb/{responses,chat-completions,anthropic-messages}/zod/`
+- Compliance suites: `src/lib/compliance/{responses,chat-completions,anthropic-messages}/`
+- Generic runner core: `src/lib/compliance/core/`
+- CLI: `bin/compliance-test.ts`
+- Web tester: `src/components/ComplianceTester.tsx`, mounted at `/compliance/{responses,chat-completions,anthropic-messages}`
 
 ## Compliance testing
 
-This repo includes an interactive compliance tester in the docs site (`/compliance`) and a CLI runner for faster local iteration and CI (`bin/compliance-test.ts`).
+The CLI dispatches to a suite via `--spec`. Each suite carries its own defaults (base URL, model, auth header, endpoint, extra headers) so you typically only supply the API key.
+
+### Responses
+
+```bash
+bun run test:compliance:responses --base-url http://localhost:8000/v1 --api-key $API_KEY
+```
+
+### Chat Completions
+
+```bash
+bun run test:compliance:chat --base-url https://api.openai.com/v1 --api-key $OPENAI_API_KEY
+```
+
+### Anthropic Messages
+
+The suite auto-applies `x-api-key` auth (no Bearer prefix) and `anthropic-version: 2023-06-01`.
+
+```bash
+bun run test:compliance:anthropic --base-url https://api.anthropic.com --api-key $ANTHROPIC_API_KEY
+```
+
+### Filter or get help
+
+```bash
+bun run test:compliance --spec chat-completions --filter basic-completion,streaming-completion
+bun run test:compliance --help
+```
 
 ### Web UI
 
-The interactive compliance tester is available at https://www.openresponses.org/compliance.
+`bun run dev` then visit:
 
-### CLI
+- `/compliance` — hub
+- `/compliance/responses`
+- `/compliance/chat-completions`
+- `/compliance/anthropic-messages`
 
-Run the same compliance suite as the web UI from the command line. For example:
+## Adding a new spec
 
-```bash
-bun run test:compliance --base-url http://localhost:8000/v1 --api-key $API_KEY
-```
+Each suite is a `SpecSuite<TReq, TRes, TStreamCtx>` (see `src/lib/compliance/core/types.ts`). To add a fourth surface:
 
-Filter to specific tests:
-
-```bash
-bun run test:compliance --base-url http://localhost:8000/v1 --api-key $API_KEY --filter basic-response,streaming-response
-```
-
-For all flags:
-
-```bash
-bun run test:compliance --help
-```
+1. Drop an OpenAPI document at `schema/<spec-id>/openapi.json` and a matching `kubb.<spec-id>.config.ts`.
+2. Add `spec:<spec-id>` and `generate:zod:<spec-id>` scripts to `package.json`.
+3. Implement `src/lib/compliance/<spec-id>/{suite.ts,templates.ts,sse-events.ts,validators.ts}` and export a `SpecSuite`.
+4. Register it in the `specs` map in `bin/compliance-test.ts` and add a sibling MDX page under `src/pages/compliance/`.

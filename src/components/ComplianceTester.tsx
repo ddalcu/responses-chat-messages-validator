@@ -1,23 +1,26 @@
 import { useState, useCallback, useId } from "react";
-import {
-  testTemplates,
-  runAllTests,
-  type TestResult,
-  type TestConfig,
-} from "../lib/compliance-tests";
+import { runAllTests } from "../lib/compliance/core/runner";
+import type {
+  SpecSuite,
+  TestConfig,
+  TestResult,
+  TestTemplate,
+} from "../lib/compliance/core/types";
 
 interface Props {
+  suite: SpecSuite;
   defaultApiKey?: string;
 }
 
-export default function ComplianceTester({ defaultApiKey = "" }: Props) {
+export default function ComplianceTester({ suite, defaultApiKey = "" }: Props) {
   const id = useId();
+  const templates = suite.templates;
   const [config, setConfig] = useState<TestConfig>({
-    baseUrl: "https://api.openai.com/v1",
+    baseUrl: suite.defaultBaseUrl,
     apiKey: defaultApiKey,
-    authHeaderName: "Authorization",
-    useBearerPrefix: true,
-    model: "gpt-4o-mini",
+    authHeaderName: suite.defaultAuthHeaderName,
+    useBearerPrefix: suite.defaultUseBearerPrefix,
+    model: suite.defaultModel,
     runtime: "browser",
   });
 
@@ -29,7 +32,7 @@ export default function ComplianceTester({ defaultApiKey = "" }: Props) {
     setIsRunning(true);
     setResults(new Map());
 
-    const runnableTemplates = testTemplates.filter(
+    const runnableTemplates = templates.filter(
       (test) => !test.unsupportedReason?.(config),
     );
 
@@ -45,6 +48,7 @@ export default function ComplianceTester({ defaultApiKey = "" }: Props) {
     setResults(initialResults);
 
     await runAllTests(
+      suite,
       config,
       (result) => {
         setResults((prev) => {
@@ -57,7 +61,7 @@ export default function ComplianceTester({ defaultApiKey = "" }: Props) {
     );
 
     setIsRunning(false);
-  }, [config]);
+  }, [config, suite, templates]);
 
   const toggleExpanded = (testId: string) => {
     setExpandedTests((prev) => {
@@ -111,14 +115,14 @@ export default function ComplianceTester({ defaultApiKey = "" }: Props) {
   const failedCount = Array.from(results.values()).filter(
     (r) => r.status === "failed",
   ).length;
-  const cliOnlyCount = testTemplates.filter((test) =>
+  const cliOnlyCount = templates.filter((test) =>
     test.unsupportedReason?.(config),
   ).length;
-  const runnableTests = testTemplates.length - cliOnlyCount;
-  const browserRunnableTests = testTemplates.filter(
+  const runnableTests = templates.length - cliOnlyCount;
+  const browserRunnableTests = templates.filter(
     (test) => !test.unsupportedReason?.(config),
   );
-  const cliOnlyTests = testTemplates.filter((test) =>
+  const cliOnlyTests = templates.filter((test) =>
     test.unsupportedReason?.(config),
   );
   const skippedCount = Array.from(results.values()).filter(
@@ -126,7 +130,7 @@ export default function ComplianceTester({ defaultApiKey = "" }: Props) {
   ).length;
   const otherSkippedCount = Math.max(0, skippedCount - cliOnlyCount);
 
-  const renderTestCard = (test: (typeof testTemplates)[number]) => {
+  const renderTestCard = (test: TestTemplate) => {
     const unsupportedReason = test.unsupportedReason?.(config);
     const isCliOnly = Boolean(unsupportedReason);
     const result = results.get(test.id) || {
@@ -239,7 +243,7 @@ export default function ComplianceTester({ defaultApiKey = "" }: Props) {
               <div className="mt-4 rounded border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-600">
                 Run this test from the CLI:
                 <pre className="mt-2 overflow-x-auto font-mono text-xs">
-                  {`bun run test:compliance --base-url ${config.baseUrl} --model ${config.model} --filter ${test.id}`}
+                  {`bun run test:compliance --spec ${suite.id} --base-url ${config.baseUrl} --model ${config.model} --filter ${test.id}`}
                 </pre>
               </div>
             )}
@@ -272,7 +276,7 @@ export default function ComplianceTester({ defaultApiKey = "" }: Props) {
                 setConfig((c) => ({ ...c, baseUrl: e.target.value }))
               }
               className="w-full rounded-md border border-stone-300 bg-white px-4 py-2 font-mono text-sm text-stone-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/50 focus:outline-none"
-              placeholder="https://api.openai.com/v1"
+              placeholder={suite.defaultBaseUrl}
             />
           </div>
 
@@ -291,7 +295,7 @@ export default function ComplianceTester({ defaultApiKey = "" }: Props) {
                 setConfig((c) => ({ ...c, model: e.target.value }))
               }
               className="w-full rounded-md border border-stone-300 bg-white px-4 py-2 font-mono text-sm text-stone-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/50 focus:outline-none"
-              placeholder="gpt-4o-mini"
+              placeholder={suite.defaultModel}
             />
           </div>
 
@@ -329,7 +333,7 @@ export default function ComplianceTester({ defaultApiKey = "" }: Props) {
                 setConfig((c) => ({ ...c, authHeaderName: e.target.value }))
               }
               className="w-full rounded-md border border-stone-300 bg-white px-4 py-2 font-mono text-sm text-stone-900 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/50 focus:outline-none"
-              placeholder="Authorization"
+              placeholder={suite.defaultAuthHeaderName}
             />
           </div>
 

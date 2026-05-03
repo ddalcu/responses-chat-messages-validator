@@ -1,0 +1,20 @@
+---
+layout: ../../layouts/DocsLayout.astro
+title: Acceptance Tests — OpenAI Responses
+showToc: false
+---
+
+import ComplianceTester from "../../components/ComplianceTester";
+import { responsesSuite } from "../../lib/compliance/responses/suite";
+
+<h1 class="page-title">Acceptance Tests — OpenAI Responses</h1>
+
+Test any API endpoint for Open Responses specification compliance.
+Configure your connection details and run the test suite to validate
+responses against the OpenAPI schema.
+
+<ComplianceTester
+  client:load
+  suite={responsesSuite}
+  defaultApiKey={import.meta.env.OPENAI_API_KEY ?? ""}
+/>

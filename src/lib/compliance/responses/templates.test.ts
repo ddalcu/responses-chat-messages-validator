@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { webSocketErrorEventSchema } from "../generated/kubb/zod/webSocketErrorEventSchema";
-import { webSocketResponseCreateEventSchema } from "../generated/kubb/zod/webSocketResponseCreateEventSchema";
-import { testTemplates } from "./compliance-tests";
-import { parseStreamingEventData } from "./sse-parser";
+import { webSocketErrorEventSchema } from "../../../generated/kubb/responses/zod/webSocketErrorEventSchema";
+import { webSocketResponseCreateEventSchema } from "../../../generated/kubb/responses/zod/webSocketResponseCreateEventSchema";
+import { parseStreamingEventData } from "./sse-events";
+import { responsesTemplates } from "./templates";
 
 const websocketTemplateIds = [
   "websocket-response",
@@ -47,7 +47,7 @@ describe("WebSocket compliance coverage", () => {
   });
 
   it("keeps a compliance template for each testable WebSocket requirement", () => {
-    const actualIds = testTemplates.map((template) => template.id);
+    const actualIds = responsesTemplates.map((template) => template.id);
 
     for (const id of websocketTemplateIds) {
       expect(actualIds).toContain(id);
@@ -55,7 +55,7 @@ describe("WebSocket compliance coverage", () => {
   });
 
   it("keeps WebSocket template seed requests valid for the WebSocket schema", () => {
-    const websocketTemplates = testTemplates.filter(
+    const websocketTemplates = responsesTemplates.filter(
       (template) => template.transport === "websocket",
     );
     const config = {

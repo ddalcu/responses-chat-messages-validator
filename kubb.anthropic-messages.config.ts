@@ -5,10 +5,10 @@ import { pluginZod } from "@kubb/plugin-zod";
 export default defineConfig({
   root: ".",
   input: {
-    path: "./public/openapi/responses.json",
+    path: "./public/openapi/anthropic-messages.json",
   },
   output: {
-    path: "./src/generated/kubb/responses",
+    path: "./src/generated/kubb/anthropic-messages",
     clean: true,
   },
   plugins: [
