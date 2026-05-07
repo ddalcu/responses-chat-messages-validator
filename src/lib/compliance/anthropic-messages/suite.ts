@@ -24,4 +24,5 @@ export const anthropicMessagesSuite: SpecSuite<
   templates: anthropicMessagesTemplates,
   parseStream: parseSSEStream,
   validateResponse: validateMessageResource,
+  getOutputTokens: (response) => response.usage?.output_tokens,
 };

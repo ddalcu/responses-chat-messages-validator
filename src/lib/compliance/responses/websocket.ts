@@ -4,6 +4,7 @@ import type {
   TestResult,
   TestTemplate,
 } from "../core/types";
+import { buildAuthHeader } from "../core/http";
 import { formatZodIssues } from "../core/validators";
 import {
   getTerminalResponse,
@@ -84,9 +85,7 @@ export async function makeWebSocketSession(
   steps: WebSocketRequestStep[],
   options: WebSocketSessionOptions = {},
 ): Promise<WebSocketTurnResult[]> {
-  const authValue = config.useBearerPrefix
-    ? `Bearer ${config.apiKey}`
-    : config.apiKey;
+  const authHeader = buildAuthHeader(config);
 
   return new Promise((resolve, reject) => {
     const turns = steps.map(() => createEmptyWebSocketTurn());
@@ -206,13 +205,22 @@ export async function makeWebSocketSession(
       ws = new WebSocketWithHeaders(toWebSocketUrl(config.baseUrl), {
         headers: {
           "Content-Type": "application/json",
-          [config.authHeaderName]: authValue,
+          ...authHeader,
         },
       });
     } catch (error) {
       fail(error instanceof Error ? error : new Error(String(error)));
       return;
     }
+
+    // Connection-phase timeout. If the server's HTTP port accepts TCP but
+    // never completes the WebSocket upgrade (e.g. LM Studio, OpenAI itself —
+    // anything that isn't a WS endpoint), neither `open` nor `error` fires
+    // and we'd hang forever. The first armTimeout() inside sendCurrentRequest
+    // clears this and replaces it with the per-turn timer.
+    timeout = setTimeout(() => {
+      fail(new Error("WebSocket connection timed out (no upgrade within 10s)"));
+    }, 10000);
 
     ws.addEventListener("open", () => {
       sendCurrentRequest();
@@ -286,15 +294,11 @@ async function makeCompactRequest(
   config: TestConfig,
   body: Record<string, unknown>,
 ): Promise<Response> {
-  const authValue = config.useBearerPrefix
-    ? `Bearer ${config.apiKey}`
-    : config.apiKey;
-
   return fetch(`${config.baseUrl.replace(/\/$/, "")}/responses/compact`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      [config.authHeaderName]: authValue,
+      ...buildAuthHeader(config),
     },
     body: JSON.stringify(body),
   });

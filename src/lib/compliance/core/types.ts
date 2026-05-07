@@ -18,6 +18,8 @@ export interface TestConfig {
   useBearerPrefix: boolean;
   model: string;
   runtime?: "browser" | "server";
+  /** Per-request timeout in milliseconds. Defaults to 60_000 in `makeRequest`. */
+  timeoutMs?: number;
 }
 
 export interface TestResult {
@@ -30,6 +32,8 @@ export interface TestResult {
   response?: unknown;
   errors?: string[];
   streamEvents?: number;
+  outputTokens?: number;
+  tokensPerSecond?: number;
 }
 
 /**
@@ -104,4 +108,5 @@ export interface SpecSuite<
   templates: TestTemplate<TReq, TRes, TStreamCtx>[];
   parseStream: (res: Response) => Promise<StreamParseResult<TRes, TStreamCtx>>;
   validateResponse: (raw: unknown) => ValidateResponseOutcome<TRes>;
+  getOutputTokens?: (response: TRes) => number | undefined;
 }

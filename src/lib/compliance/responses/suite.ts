@@ -19,4 +19,8 @@ export const responsesSuite: SpecSuite<
   templates: responsesTemplates,
   parseStream: parseSSEStream,
   validateResponse: validateResponseResource,
+  getOutputTokens: (response) =>
+    "usage" in response
+      ? (response.usage?.output_tokens ?? undefined)
+      : undefined,
 };

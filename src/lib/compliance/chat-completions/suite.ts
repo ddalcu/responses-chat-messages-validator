@@ -25,4 +25,5 @@ export const chatCompletionsSuite: SpecSuite<
   templates: chatCompletionsTemplates,
   parseStream: parseSSEStream,
   validateResponse: validateChatCompletion,
+  getOutputTokens: (response) => response.usage?.completion_tokens,
 };

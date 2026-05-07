@@ -108,6 +108,12 @@ function validateResponseData<TReq, TRes, TStreamCtx>(
     v(parsed.data as TRes, context),
   );
 
+  const outputTokens = suite.getOutputTokens?.(parsed.data as TRes);
+  const tokensPerSecond =
+    outputTokens !== undefined && duration > 0
+      ? Math.round((outputTokens / duration) * 1000)
+      : undefined;
+
   return {
     id: template.id,
     name: template.name,
@@ -118,6 +124,8 @@ function validateResponseData<TReq, TRes, TStreamCtx>(
     response: parsed.data,
     errors,
     streamEvents: context.sseResult?.events.length,
+    outputTokens,
+    tokensPerSecond,
   };
 }
 

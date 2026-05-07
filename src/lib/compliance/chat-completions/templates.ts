@@ -95,6 +95,7 @@ export const chatCompletionsTemplates: ChatCompletionsTestTemplate[] = [
     getRequest: (config) => ({
       model: config.model,
       messages: [{ role: "user", content: "Count from 1 to 5." }],
+      stream_options: { include_usage: true },
     }),
     validators: [
       streamingHasEvents,
@@ -226,6 +227,7 @@ export const chatCompletionsTemplates: ChatCompletionsTestTemplate[] = [
       messages: [{ role: "user", content: "What's the weather in Tokyo?" }],
       tools: [weatherTool],
       tool_choice: "auto",
+      stream_options: { include_usage: true },
     }),
     validators: [
       streamingHasEvents,
