@@ -34,6 +34,15 @@ export interface TestResult {
   streamEvents?: number;
   outputTokens?: number;
   tokensPerSecond?: number;
+  /** Tags carried over from the template, useful for JSON consumers. */
+  tags?: string[];
+  /**
+   * Per-step results for templates that fan out into multiple HTTP requests
+   * (tool round-trips, streaming↔non-streaming parity, cache equivalence).
+   * The parent's `errors` array drives pass/fail; sub-results are reported for
+   * human inspection when the user runs with --verbose.
+   */
+  subResults?: TestResult[];
 }
 
 /**
@@ -84,6 +93,12 @@ export interface TestTemplate<
     config: TestConfig,
     template: TestTemplate<TReq, TRes, TStreamCtx>,
   ) => Promise<TestResult>;
+  /**
+   * Free-form tags for filtering. The CLI's `--tag` flag selects templates
+   * whose tag list intersects the requested set. Behavioural / engine-
+   * correctness tests carry `["behavioral", <category>]`.
+   */
+  tags?: string[];
 }
 
 export interface ValidateResponseOutcome<TRes = unknown> {

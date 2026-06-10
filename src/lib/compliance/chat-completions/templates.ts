@@ -1,6 +1,8 @@
 import type { z } from "zod";
 import type { createChatCompletionRequestSchema } from "../../../generated/kubb/chat-completions/zod/createChatCompletionRequestSchema";
+import { deriveBehaviorTemplates } from "../core/behavior";
 import type { TestTemplate } from "../core/types";
+import { chatCompletionsBehaviorAdapter } from "./behavior/adapter";
 import type {
   ChatCompletion,
   ChatCompletionsStreamContext,
@@ -50,7 +52,13 @@ const weatherTool = {
   },
 };
 
-export const chatCompletionsTemplates: ChatCompletionsTestTemplate[] = [
+const behaviorTemplates = deriveBehaviorTemplates<
+  ChatCompletionsRequestBody,
+  ChatCompletion,
+  ChatCompletionsStreamContext
+>(chatCompletionsBehaviorAdapter);
+
+const baseChatCompletionsTemplates: ChatCompletionsTestTemplate[] = [
   {
     id: "basic-completion",
     name: "Basic Completion",
@@ -236,4 +244,9 @@ export const chatCompletionsTemplates: ChatCompletionsTestTemplate[] = [
       streamingToolArgumentsAreJson,
     ],
   },
+];
+
+export const chatCompletionsTemplates: ChatCompletionsTestTemplate[] = [
+  ...baseChatCompletionsTemplates,
+  ...behaviorTemplates,
 ];

@@ -129,7 +129,27 @@ function validateResponseData<TReq, TRes, TStreamCtx>(
   };
 }
 
+function withTemplateMeta<TReq, TRes, TStreamCtx>(
+  template: TestTemplate<TReq, TRes, TStreamCtx>,
+  result: TestResult,
+): TestResult {
+  if (!template.tags || template.tags.length === 0) return result;
+  if (result.tags && result.tags.length > 0) return result;
+  return { ...result, tags: template.tags };
+}
+
 async function runTest<TReq, TRes, TStreamCtx>(
+  suite: SpecSuite<TReq, TRes, TStreamCtx>,
+  template: TestTemplate<TReq, TRes, TStreamCtx>,
+  config: TestConfig,
+): Promise<TestResult> {
+  return withTemplateMeta(
+    template,
+    await runTestInner(suite, template, config),
+  );
+}
+
+async function runTestInner<TReq, TRes, TStreamCtx>(
   suite: SpecSuite<TReq, TRes, TStreamCtx>,
   template: TestTemplate<TReq, TRes, TStreamCtx>,
   config: TestConfig,
@@ -238,24 +258,26 @@ export async function runAllTests<TReq, TRes, TStreamCtx>(
   const promises = templates.map(async (template) => {
     const unsupportedReason = template.unsupportedReason?.(config);
     if (unsupportedReason) {
-      const result: TestResult = {
+      const result: TestResult = withTemplateMeta(template, {
         id: template.id,
         name: template.name,
         description: template.description,
         status: "skipped",
         duration: 0,
         errors: [unsupportedReason],
-      };
+      });
       onProgress(result);
       return result;
     }
 
-    onProgress({
-      id: template.id,
-      name: template.name,
-      description: template.description,
-      status: "running",
-    });
+    onProgress(
+      withTemplateMeta(template, {
+        id: template.id,
+        name: template.name,
+        description: template.description,
+        status: "running",
+      }),
+    );
 
     const result = await runTest(suite, template, config);
     onProgress(result);

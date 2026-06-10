@@ -1,6 +1,8 @@
 import type { z } from "zod";
 import type { createMessageBodySchema } from "../../../generated/kubb/anthropic-messages/zod/createMessageBodySchema";
+import { deriveBehaviorTemplates } from "../core/behavior";
 import type { TestTemplate } from "../core/types";
+import { anthropicMessagesBehaviorAdapter } from "./behavior/adapter";
 import type { AnthropicStreamContext } from "./sse-events";
 import type { ParsedResponse } from "./validators";
 import {
@@ -66,7 +68,13 @@ const validateWeatherToolInput = (parsed: unknown): string[] => {
   return [];
 };
 
-export const anthropicMessagesTemplates: AnthropicMessagesTestTemplate[] = [
+const behaviorTemplates = deriveBehaviorTemplates<
+  AnthropicMessagesRequestBody,
+  ParsedResponse,
+  AnthropicStreamContext
+>(anthropicMessagesBehaviorAdapter);
+
+const baseAnthropicMessagesTemplates: AnthropicMessagesTestTemplate[] = [
   {
     id: "basic-message",
     name: "Basic Message",
@@ -255,4 +263,9 @@ export const anthropicMessagesTemplates: AnthropicMessagesTestTemplate[] = [
       reassembledToolInputIsValidJson(validateWeatherToolInput),
     ],
   },
+];
+
+export const anthropicMessagesTemplates: AnthropicMessagesTestTemplate[] = [
+  ...baseAnthropicMessagesTemplates,
+  ...behaviorTemplates,
 ];

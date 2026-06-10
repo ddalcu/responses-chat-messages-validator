@@ -21,7 +21,8 @@
     "test:compliance": "bun run bin/compliance-test.ts",
     "test:compliance:responses": "bun run bin/compliance-test.ts --spec responses",
     "test:compliance:chat": "bun run bin/compliance-test.ts --spec chat-completions",
-    "test:compliance:anthropic": "bun run bin/compliance-test.ts --spec anthropic-messages"
+    "test:compliance:anthropic": "bun run bin/compliance-test.ts --spec anthropic-messages",
+    "test:unit": "bun test"
   },
   "author": "",
   "license": "ISC",

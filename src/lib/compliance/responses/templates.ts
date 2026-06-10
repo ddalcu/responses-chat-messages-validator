@@ -1,7 +1,9 @@
 import { compactResourceSchema } from "../../../generated/kubb/responses/zod/compactResourceSchema";
 import type { createResponseBodySchema } from "../../../generated/kubb/responses/zod/createResponseBodySchema";
 import type { z } from "zod";
+import { deriveBehaviorTemplates } from "../core/behavior";
 import type { TestTemplate } from "../core/types";
+import { responsesBehaviorAdapter } from "./behavior/adapter";
 import type { ParsedResponse } from "./validators";
 import {
   compactObject,
@@ -33,7 +35,13 @@ export type ResponsesTestTemplate = TestTemplate<
   unknown
 >;
 
-export const responsesTemplates: ResponsesTestTemplate[] = [
+const behaviorTemplates = deriveBehaviorTemplates<
+  ResponsesRequestBody,
+  ParsedResponse,
+  unknown
+>(responsesBehaviorAdapter);
+
+const baseResponsesTemplates: ResponsesTestTemplate[] = [
   {
     id: "basic-response",
     name: "Basic Text Response",
@@ -459,4 +467,9 @@ export const responsesTemplates: ResponsesTestTemplate[] = [
       ],
     }),
   },
+];
+
+export const responsesTemplates: ResponsesTestTemplate[] = [
+  ...baseResponsesTemplates,
+  ...behaviorTemplates,
 ];

@@ -37,6 +37,7 @@ interface CliArgs {
   authHeader?: string;
   noBearer?: boolean;
   filter?: string[];
+  tag?: string[];
   verbose?: boolean;
   json?: boolean;
   help?: boolean;
@@ -81,7 +82,18 @@ function parseArgs(argv: string[]): CliArgs {
         break;
       case "--filter":
       case "-f":
-        args.filter = nextArg.split(",").map((s) => s.trim());
+        args.filter = nextArg
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        i += 2;
+        break;
+      case "--tag":
+      case "-t":
+        args.tag = nextArg
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
         i += 2;
         break;
       case "--verbose":
@@ -161,6 +173,10 @@ Options:
   -f, --filter <ids>          Filter tests by ID (comma-separated). In auto
                               mode, applied per-suite; suites with no matching
                               templates run nothing.
+  -t, --tag <tags>            Filter tests by tag (comma-separated). Composes
+                              with --filter as a union. Engine-correctness
+                              behavioural tests carry the "behavioral" tag, so
+                              \`--tag behavioral\` runs only those.
   -v, --verbose               Verbose output with request/response details
       --json                  Output results as JSON
       --timeout <seconds>     Per-request timeout in seconds (default: 60)
@@ -205,7 +221,11 @@ function getStatusIcon(status: TestResult["status"]): string {
   }
 }
 
-function printResult(result: TestResult, verbose: boolean) {
+function printResult(
+  result: TestResult,
+  verbose: boolean,
+  indent: string = "",
+) {
   const icon = getStatusIcon(result.status);
   const parts: string[] = [];
   if (result.duration !== undefined) parts.push(`${result.duration}ms`);
@@ -219,34 +239,45 @@ function printResult(result: TestResult, verbose: boolean) {
   const name =
     result.status === "failed" ? colors.red(result.name) : result.name;
 
-  console.log(`${icon} ${name}${meta}${events}`);
+  console.log(`${indent}${icon} ${name}${meta}${events}`);
 
   if (result.status === "skipped" && result.errors?.length) {
     for (const error of result.errors) {
-      console.log(`  ${colors.gray("-")} ${colors.gray(error)}`);
+      console.log(`${indent}  ${colors.gray("-")} ${colors.gray(error)}`);
     }
   }
 
   if (result.status === "failed" && result.errors?.length) {
     for (const error of result.errors) {
-      console.log(`  ${colors.red("✗")} ${error}`);
+      console.log(`${indent}  ${colors.red("✗")} ${error}`);
     }
 
     if (verbose) {
       if (result.request) {
-        console.log(`\n  Request:`);
+        console.log(`\n${indent}  Request:`);
         console.log(
-          `  ${JSON.stringify(result.request, null, 2).split("\n").join("\n  ")}`,
+          `${indent}  ${JSON.stringify(result.request, null, 2).split("\n").join(`\n${indent}  `)}`,
         );
       }
       if (result.response) {
-        console.log(`\n  Response:`);
+        console.log(`\n${indent}  Response:`);
         const responseStr =
           typeof result.response === "string"
             ? result.response
             : JSON.stringify(result.response, null, 2);
-        console.log(`  ${responseStr.split("\n").join("\n  ")}`);
+        console.log(
+          `${indent}  ${responseStr.split("\n").join(`\n${indent}  `)}`,
+        );
       }
+    }
+  }
+
+  // Multi-request behavioural templates emit per-step results under the
+  // parent. Print them only when verbose so the default output stays terse.
+  if (verbose && result.subResults?.length) {
+    console.log(`${indent}  ${colors.gray("steps:")}`);
+    for (const sub of result.subResults) {
+      printResult(sub, verbose, `${indent}    `);
     }
   }
 }
@@ -403,6 +434,18 @@ async function probeSuite(
   );
 }
 
+function templateMatchesSelection(
+  template: { id: string; tags?: string[] },
+  args: CliArgs,
+): boolean {
+  const filterSet = args.filter?.length ? new Set(args.filter) : null;
+  const tagSet = args.tag?.length ? new Set(args.tag) : null;
+  if (!filterSet && !tagSet) return true;
+  if (filterSet && filterSet.has(template.id)) return true;
+  if (tagSet && template.tags?.some((t) => tagSet.has(t))) return true;
+  return false;
+}
+
 async function runSuite(
   suite: SpecSuite,
   config: TestConfig,
@@ -412,7 +455,10 @@ async function runSuite(
   const allUpdates: TestResult[] = [];
 
   const onProgress = (result: TestResult) => {
-    if (args.filter && !args.filter.includes(result.id)) {
+    // Selection is applied to templates up front; here we just filter the
+    // progress stream so a status update for a template not in the selection
+    // (currently impossible, but defensive) doesn't leak into output.
+    if (!templateMatchesSelection({ id: result.id, tags: result.tags }, args)) {
       return;
     }
     allUpdates.push(result);
@@ -421,9 +467,12 @@ async function runSuite(
     }
   };
 
-  const selectedTemplates = args.filter?.length
-    ? suite.templates.filter((template) => args.filter?.includes(template.id))
-    : suite.templates;
+  const selectedTemplates =
+    args.filter?.length || args.tag?.length
+      ? suite.templates.filter((template) =>
+          templateMatchesSelection(template, args),
+        )
+      : suite.templates;
 
   await runAllTests(suite, config, onProgress, selectedTemplates);
 
@@ -455,6 +504,10 @@ function printSuiteHeader(suite: SpecSuite, config: TestConfig, args: CliArgs) {
   console.log();
 }
 
+function failedIds(summary: SuiteRunSummary): string[] {
+  return summary.results.filter((r) => r.status === "failed").map((r) => r.id);
+}
+
 function printSuiteFooter(summary: SuiteRunSummary) {
   console.log(`\n${"=".repeat(50)}`);
   console.log(
@@ -462,21 +515,14 @@ function printSuiteFooter(summary: SuiteRunSummary) {
   );
 
   if (summary.failed > 0) {
-    console.log(`\nFailed tests:`);
-    for (const r of summary.results) {
-      if (r.status === "failed") {
-        console.log(`\n${r.name}:`);
-        for (const e of r.errors || []) {
-          console.log(`  - ${e}`);
-        }
-      }
-    }
+    const ids = failedIds(summary).join(", ");
+    console.log(`${colors.red("Failed:")} ${ids}`);
   } else {
     const message =
       summary.skipped > 0
         ? "✓ All runnable tests passed!"
         : "✓ All tests passed!";
-    console.log(`\n${colors.green(message)}`);
+    console.log(colors.green(message));
   }
 }
 
@@ -675,6 +721,21 @@ async function main() {
     console.log(
       `  ${colors.green(`${totalPassed} passed`)}, ${colors.red(`${totalFailed} failed`)}, ${colors.gray(`${totalSkipped} skipped`)}`,
     );
+    // Per-spec failure breakdown — one line per spec that had failures, with
+    // just the failing test ids. Skipped specs are flagged on their own line.
+    for (const s of summaries) {
+      if (!s.probe.supported) {
+        console.log(
+          `  ${s.spec.padEnd(20)} ${colors.gray("(spec not supported at this endpoint)")}`,
+        );
+        continue;
+      }
+      if (s.failed === 0) continue;
+      const ids = failedIds(s).join(", ");
+      console.log(
+        `  ${colors.red(s.spec.padEnd(20))} ${s.failed} failed: ${ids}`,
+      );
+    }
     if (totalSupported === 0) {
       console.log(
         colors.yellow(

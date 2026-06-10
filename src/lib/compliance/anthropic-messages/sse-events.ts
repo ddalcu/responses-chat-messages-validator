@@ -51,12 +51,16 @@ export interface ParsedEvent {
 export interface AnthropicStreamContext {
   /** Final `Message` reassembled from `message_start` + `message_delta`s. */
   finalMessage: Message | null;
+  /** `text_delta` strings concatenated per `content_block` index. */
+  textByIndex: Record<number, string>;
   /** `partial_json` strings concatenated per `content_block` index. */
   toolInputJsonByIndex: Record<number, string>;
   /** Indices that received `content_block_start` whose block was `tool_use`. */
   toolUseIndices: Set<number>;
   /** Tool names by content_block index, captured at `content_block_start`. */
   toolNamesByIndex: Record<number, string>;
+  /** Tool use ids by content_block index, captured at `content_block_start`. */
+  toolIdsByIndex: Record<number, string>;
   /** Whether a `message_stop` event was seen — required to be terminal. */
   sawMessageStop: boolean;
   /** Counts of each event `type` seen, used by validators. */
@@ -122,6 +126,10 @@ function applyEvent(ctx: AnthropicStreamContext, event: StreamEvent): void {
         if (typeof name === "string") {
           ctx.toolNamesByIndex[event.index] = name;
         }
+        const id = (block as { id?: unknown }).id;
+        if (typeof id === "string") {
+          ctx.toolIdsByIndex[event.index] = id;
+        }
       }
       break;
     }
@@ -129,6 +137,10 @@ function applyEvent(ctx: AnthropicStreamContext, event: StreamEvent): void {
       if (event.delta.type === "input_json_delta") {
         const prev = ctx.toolInputJsonByIndex[event.index] ?? "";
         ctx.toolInputJsonByIndex[event.index] = prev + event.delta.partial_json;
+      }
+      if (event.delta.type === "text_delta") {
+        const prev = ctx.textByIndex[event.index] ?? "";
+        ctx.textByIndex[event.index] = prev + event.delta.text;
       }
       break;
     }
@@ -172,9 +184,11 @@ export async function parseSSEStream(
   const errors: string[] = [];
   const context: AnthropicStreamContext = {
     finalMessage: null,
+    textByIndex: {},
     toolInputJsonByIndex: {},
     toolUseIndices: new Set<number>(),
     toolNamesByIndex: {},
+    toolIdsByIndex: {},
     sawMessageStop: false,
     eventTypeCounts: {},
   };
