@@ -544,7 +544,7 @@ function formatProbeStatus(probe: ProbeResult): string {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
-  if (args.help) {
+  if (args.help || process.argv.slice(2).length === 0) {
     printHelp();
     process.exit(0);
   }
